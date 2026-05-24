@@ -27,9 +27,11 @@ const server = http.createServer(app);
 
 // Configure CORS
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'http://localhost:5173',
-  process.env.CLIENT_URL_ALT || 'http://127.0.0.1:5173',
-];
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.CLIENT_URL,
+  process.env.CLIENT_URL_ALT,
+].filter(Boolean);
 
 app.use(
   cors({
