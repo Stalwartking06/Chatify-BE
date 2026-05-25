@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
+import compression from "compression";
 
 // Configuration imports
 import connectDB from './config/db.js';
@@ -32,7 +33,6 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.CLIENT_URL_ALT,
 ].filter(Boolean);
-
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -53,17 +53,25 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows loading images from server in frontend
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(compression());
+
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
+
 
 // Static folder for local file uploads
 const uploadsDir = path.resolve('uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
-
+app.use(
+  "/uploads",
+  express.static(uploadsDir, {
+    maxAge: "7d",
+    etag: true,
+  })
+);
 // Attach APIs
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
