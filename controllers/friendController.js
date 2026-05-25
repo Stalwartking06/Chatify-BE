@@ -1,6 +1,8 @@
 import FriendRequest from '../models/FriendRequest.js';
 import User from '../models/User.js';
 import { emitToUser } from '../sockets/socketHandler.js';
+import Message from '../models/Message.js';
+import mongoose from 'mongoose';
 
 export const sendFriendRequest = async (req, res) => {
   const { receiverId } = req.body;
@@ -291,14 +293,18 @@ export const getFriends = async (req, res) => {
     }
 
     const friendIds = user.friends.map((f) => f._id);
+    
+    // Explicitly cast string/raw IDs to Mongoose ObjectIds for reliable Aggregation matching
+    const friendObjectIds = friendIds.map((fId) => new mongoose.Types.ObjectId(fId));
+    const userObjectId = new mongoose.Types.ObjectId(req.user._id);
 
     // High performance aggregation to fetch the last message for all friends
     const lastMessages = await Message.aggregate([
       {
         $match: {
           $or: [
-            { sender: req.user._id, receiver: { $in: friendIds } },
-            { receiver: req.user._id, sender: { $in: friendIds } },
+            { sender: userObjectId, receiver: { $in: friendObjectIds } },
+            { receiver: userObjectId, sender: { $in: friendObjectIds } },
           ],
         },
       },
@@ -309,7 +315,7 @@ export const getFriends = async (req, res) => {
         $group: {
           _id: {
             $cond: [
-              { $eq: ['$sender', req.user._id] },
+              { $eq: ['$sender', userObjectId] },
               '$receiver',
               '$sender',
             ],
