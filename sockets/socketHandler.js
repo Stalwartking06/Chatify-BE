@@ -94,22 +94,40 @@ export const initSocket = (io) => {
     // Send online users
     socket.emit('online-users-list', Array.from(userSockets.keys()));
 
-    // Typing Start
+    // Typing Start - rate limited to once per 1000ms
     socket.on('typing-start', ({ receiverId }) => {
+      const now = Date.now();
+      if (socket.lastTypingStart && now - socket.lastTypingStart < 1000) {
+        return;
+      }
+      socket.lastTypingStart = now;
+
       emitToUser(receiverId, 'typing-start', {
         senderId: userId,
       });
     });
 
-    // Typing Stop
+    // Typing Stop - rate limited to once per 1000ms
     socket.on('typing-stop', ({ receiverId }) => {
+      const now = Date.now();
+      if (socket.lastTypingStop && now - socket.lastTypingStop < 1000) {
+        return;
+      }
+      socket.lastTypingStop = now;
+
       emitToUser(receiverId, 'typing-stop', {
         senderId: userId,
       });
     });
 
-    // Message Seen
+    // Message Seen - rate limited to once per 200ms
     socket.on('message-seen', async ({ messageId, senderId }) => {
+      const now = Date.now();
+      if (socket.lastMessageSeen && now - socket.lastMessageSeen < 200) {
+        return;
+      }
+      socket.lastMessageSeen = now;
+
       try {
         if (messageId) {
           await Message.findByIdAndUpdate(messageId, {

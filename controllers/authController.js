@@ -161,7 +161,9 @@ export const refreshToken = async (req, res) => {
 
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate('friends', 'displayName username avatar onlineStatus lastSeen');
+    const user = await User.findById(req.user._id)
+      .select('_id username email displayName avatar bio onlineStatus lastSeen')
+      .lean();
     res.json({
       success: true,
       user,

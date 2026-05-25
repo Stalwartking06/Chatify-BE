@@ -4,7 +4,7 @@ import { uploadImage } from '../services/cloudinaryService.js';
 import { emitToUser, userSockets } from '../sockets/socketHandler.js';
 
 export const sendMessage = async (req, res) => {
-  const { receiverId, text } = req.body;
+  const { receiverId, text, clientMessageId } = req.body;
 
   const senderId = req.user._id;
 
@@ -68,6 +68,7 @@ export const sendMessage = async (req, res) => {
       text: text?.trim() || '',
       image: imageUrl,
       status: initialStatus,
+      clientMessageId: clientMessageId || '',
     });
 
     // Lightweight realtime payload
@@ -88,6 +89,7 @@ export const sendMessage = async (req, res) => {
       text: message.text,
       image: message.image,
       status: message.status,
+      clientMessageId: message.clientMessageId,
       createdAt: message.createdAt,
     };
 
@@ -145,8 +147,10 @@ export const getMessages = async (req, res) => {
       });
     }
 
-    // Fetch latest messages
-    const messages = await Message.find({
+    const limit = parseInt(req.query.limit) || 50;
+    const before = req.query.before; // ISO Date String
+
+    const query = {
       $or: [
         {
           sender: userId,
@@ -157,10 +161,20 @@ export const getMessages = async (req, res) => {
           receiver: userId,
         },
       ],
-    })
-      .sort({ createdAt: 1 })
-      .limit(50)
+    };
+
+    if (before) {
+      query.createdAt = { $lt: new Date(before) };
+    }
+
+    // Fetch latest messages
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
+
+    // Reverse messages to return them in chronological order
+    messages.reverse();
 
     // Count unread
     const unreadCount = await Message.countDocuments({

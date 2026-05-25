@@ -25,6 +25,8 @@ const friendRequestSchema = new mongoose.Schema(
 
 // Compound index to ensure uniqueness of requests per sender-receiver pair
 friendRequestSchema.index({ sender: 1, receiver: 1 }, { unique: true });
+friendRequestSchema.index({ receiver: 1, status: 1 });
+friendRequestSchema.index({ sender: 1, status: 1 });
 
 const FriendRequest = mongoose.model('FriendRequest', friendRequestSchema);
 

@@ -27,6 +27,10 @@ const messageSchema = new mongoose.Schema(
       enum: ['sent', 'delivered', 'seen'],
       default: 'sent',
     },
+    clientMessageId: {
+      type: String,
+      default: '',
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -41,6 +45,8 @@ const messageSchema = new mongoose.Schema(
 
 // Compound index to speed up message retrieval for conversations
 messageSchema.index({ sender: 1, receiver: 1, createdAt: 1 });
+messageSchema.index({ receiver: 1, status: 1 });
+messageSchema.index({ clientMessageId: 1 });
 
 const Message = mongoose.model('Message', messageSchema);
 

@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Display name is required'],
       trim: true,
+      index: true,
     },
     avatar: {
       type: String,

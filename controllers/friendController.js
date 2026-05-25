@@ -275,23 +275,66 @@ export const getFriendRequests = async (req, res) => {
 
 export const getFriends = async (req, res) => {
   try {
-
     const user = await User.findById(req.user._id)
+      .select('friends')
       .populate(
         'friends',
-        'displayName username avatar bio onlineStatus lastSeen'
+        '_id displayName username avatar bio onlineStatus lastSeen'
       )
       .lean();
 
+    if (!user || !user.friends || user.friends.length === 0) {
+      return res.json({
+        success: true,
+        friends: [],
+      });
+    }
+
+    const friendIds = user.friends.map((f) => f._id);
+
+    // High performance aggregation to fetch the last message for all friends
+    const lastMessages = await Message.aggregate([
+      {
+        $match: {
+          $or: [
+            { sender: req.user._id, receiver: { $in: friendIds } },
+            { receiver: req.user._id, sender: { $in: friendIds } },
+          ],
+        },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $eq: ['$sender', req.user._id] },
+              '$receiver',
+              '$sender',
+            ],
+          },
+          lastMessage: { $first: '$$ROOT' },
+        },
+      },
+    ]);
+
+    const lastMessagesMap = new Map(
+      lastMessages.map((item) => [item._id.toString(), item.lastMessage])
+    );
+
+    const friendsWithLastMessage = user.friends.map((friend) => ({
+      ...friend,
+      lastMessage: lastMessagesMap.get(friend._id.toString()) || null,
+    }));
+
     res.json({
       success: true,
-      friends: user?.friends || [],
+      friends: friendsWithLastMessage,
     });
 
   } catch (error) {
-
     console.error('Get Friends Error:', error.message);
-
     res.status(500).json({
       success: false,
       message: 'Server error retrieving friends.',
