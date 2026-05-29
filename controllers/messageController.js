@@ -1,229 +1,48 @@
-import Message from '../models/Message.js';
-import User from '../models/User.js';
-import { uploadImage } from '../services/cloudinaryService.js';
-import { emitToUser, userSockets } from '../sockets/socketHandler.js';
+import asyncHandler from "../utils/asyncHandler.js";
+import * as messageService from "../services/messageService.js";
 
-export const sendMessage = async (req, res) => {
+export const sendMessage = asyncHandler(async (req, res) => {
   const { receiverId, text, clientMessageId } = req.body;
 
-  const senderId = req.user._id;
+  const result = await messageService.send(
+    req.user,
+    receiverId,
+    text,
+    clientMessageId,
+    req.file,
+  );
 
-  try {
+  res.status(201).json(result);
+});
 
-    // Verify friendship
-    const isFriend = await User.exists({
-      _id: senderId,
-      friends: receiverId,
-    });
+export const getMessages = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
 
-    if (!isFriend) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'You can only exchange messages with accepted contacts.',
-      });
-    }
+  const result = await messageService.getHistory(
+    req.user._id,
+    req.params.friendId,
+    limit,
+    req.query.before,
+  );
 
-    let imageUrl = '';
+  res.json(result);
+});
 
-    // Upload image
-    if (req.file?.buffer) {
+export const editMessage = asyncHandler(async (req, res) => {
+  const result = await messageService.editMessage(
+    req.user._id,
+    req.params.messageId,
+    req.body.text,
+  );
 
-      imageUrl = await uploadImage(
-        req.file.buffer,
-        'chats'
-      );
+  res.json(result);
+});
 
-      // Upload failed
-      if (!imageUrl) {
-        return res.status(500).json({
-          success: false,
-          message: 'Image upload failed.',
-        });
-      }
-    }
+export const deleteMessage = asyncHandler(async (req, res) => {
+  const result = await messageService.deleteMessage(
+    req.user._id,
+    req.params.messageId,
+  );
 
-    // Empty message check
-    if (!text?.trim() && !imageUrl) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Message cannot be empty. Send text or an image.',
-      });
-    }
-
-    // Receiver online check
-    const isReceiverOnline = userSockets.has(
-      receiverId.toString()
-    );
-
-    const initialStatus = isReceiverOnline
-      ? 'delivered'
-      : 'sent';
-
-    // Create message
-    const message = await Message.create({
-      sender: senderId,
-      receiver: receiverId,
-      text: text?.trim() || '',
-      image: imageUrl,
-      status: initialStatus,
-      clientMessageId: clientMessageId || '',
-    });
-
-    // Lightweight realtime payload
-    const realtimeMessage = {
-      _id: message._id,
-
-      sender: {
-        _id: req.user._id,
-        username: req.user.username,
-        displayName: req.user.displayName,
-        avatar: req.user.avatar,
-      },
-
-      receiver: {
-        _id: receiverId,
-      },
-
-      text: message.text,
-      image: message.image,
-      status: message.status,
-      clientMessageId: message.clientMessageId,
-      createdAt: message.createdAt,
-    };
-
-    // Emit realtime events
-    emitToUser(
-      receiverId,
-      'new-message',
-      realtimeMessage
-    );
-
-    emitToUser(
-      senderId,
-      'new-message',
-      realtimeMessage
-    );
-
-    res.status(201).json({
-      success: true,
-      message: realtimeMessage,
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Send Message Error:',
-      error.message
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error sending message.',
-    });
-  }
-};
-
-export const getMessages = async (req, res) => {
-
-  const { friendId } = req.params;
-
-  const userId = req.user._id;
-
-  try {
-
-    // Verify friendship
-    const isFriend = await User.exists({
-      _id: userId,
-      friends: friendId,
-    });
-
-    if (!isFriend) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'You can only view messages of accepted contacts.',
-      });
-    }
-
-    const limit = parseInt(req.query.limit) || 50;
-    const before = req.query.before; // ISO Date String
-
-    const query = {
-      $or: [
-        {
-          sender: userId,
-          receiver: friendId,
-        },
-        {
-          sender: friendId,
-          receiver: userId,
-        },
-      ],
-    };
-
-    if (before) {
-      query.createdAt = { $lt: new Date(before) };
-    }
-
-    // Fetch latest messages
-    const messages = await Message.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
-
-    // Reverse messages to return them in chronological order
-    messages.reverse();
-
-    // Count unread
-    const unreadCount = await Message.countDocuments({
-      sender: friendId,
-      receiver: userId,
-      status: {
-        $ne: 'seen',
-      },
-    });
-
-    // Update seen only if required
-    if (unreadCount > 0) {
-
-      await Message.updateMany(
-        {
-          sender: friendId,
-          receiver: userId,
-          status: {
-            $ne: 'seen',
-          },
-        },
-        {
-          $set: {
-            status: 'seen',
-          },
-        }
-      );
-
-      // Notify sender
-      emitToUser(friendId, 'messages-seen', {
-        senderId: userId,
-      });
-    }
-
-    res.json({
-      success: true,
-      messages,
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Get Messages Error:',
-      error.message
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error retrieving messages.',
-    });
-  }
-};
+  res.json(result);
+});

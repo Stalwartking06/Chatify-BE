@@ -1,185 +1,37 @@
-import User from '../models/User.js';
-import { uploadImage } from '../services/cloudinaryService.js';
+import asyncHandler from "../utils/asyncHandler.js";
+import * as userService from "../services/userService.js";
 
-export const updateProfile = async (req, res) => {
+export const updateProfile = asyncHandler(async (req, res) => {
+  const result = await userService.updateUserProfile(
+    req.user._id,
+    req.body.displayName,
+    req.body.bio,
+    req.file,
+  );
 
-  const { displayName, bio } = req.body;
+  res.json(result);
+});
 
-  const updateData = {};
+export const searchUsers = asyncHandler(async (req, res) => {
+  const result = await userService.searchUsers(req.user._id, req.query.query);
 
-  // Clean display name
-  if (displayName?.trim()) {
-    updateData.displayName = displayName.trim();
-  }
+  res.json(result);
+});
 
-  // Clean bio
-  if (bio !== undefined) {
-    updateData.bio = bio.trim();
-  }
+export const getProfile = asyncHandler(async (req, res) => {
+  const result = await userService.getProfile(req.params.id);
 
-  try {
+  res.json(result);
+});
 
-    // Upload avatar
-    if (req.file?.buffer) {
+export const blockUser = asyncHandler(async (req, res) => {
+  const result = await userService.blockUser(req.user._id, req.body.userId);
 
-      const imageUrl = await uploadImage(
-        req.file.buffer,
-        'avatars'
-      );
+  res.json(result);
+});
 
-      // Upload failed
-      if (!imageUrl) {
-        return res.status(500).json({
-          success: false,
-          message: 'Avatar upload failed.',
-        });
-      }
+export const unblockUser = asyncHandler(async (req, res) => {
+  const result = await userService.unblockUser(req.user._id, req.body.userId);
 
-      updateData.avatar = imageUrl;
-    }
-
-    // Update profile
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      updateData,
-      {
-        new: true,
-        runValidators: true,
-      }
-    )
-      .populate(
-        'friends',
-        'displayName username avatar onlineStatus lastSeen'
-      )
-      .lean();
-
-    res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      user,
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Update Profile Error:',
-      error.message
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating profile.',
-    });
-  }
-};
-
-export const searchUsers = async (req, res) => {
-
-  const query = req.query.query?.trim();
-
-  // Empty query
-  if (!query) {
-    return res.json({
-      success: true,
-      users: [],
-    });
-  }
-
-  // Prevent tiny expensive searches
-  if (query.length < 2) {
-    return res.json({
-      success: true,
-      users: [],
-    });
-  }
-
-  try {
-
-    // Escape regex chars
-    const escapedQuery = query.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      '\\$&'
-    );
-
-    // Prefix search
-    const searchRegex = new RegExp(
-      `^${escapedQuery}`,
-      'i'
-    );
-
-    const users = await User.find({
-      _id: {
-        $ne: req.user._id,
-      },
-
-      $or: [
-        {
-          username: searchRegex,
-        },
-        {
-          displayName: searchRegex,
-        },
-      ],
-    })
-      .select(
-        'displayName username avatar bio onlineStatus'
-      )
-      .limit(10)
-      .lean();
-
-    res.json({
-      success: true,
-      users,
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Search Users Error:',
-      error.message
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error searching users.',
-    });
-  }
-};
-
-export const getProfile = async (req, res) => {
-
-  const { id } = req.params;
-
-  try {
-
-    const user = await User.findById(id)
-      .select(
-        'displayName username avatar bio onlineStatus lastSeen'
-      )
-      .lean();
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
-
-    res.json({
-      success: true,
-      user,
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Get Profile Error:',
-      error.message
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error retrieving profile.',
-    });
-  }
-};
+  res.json(result);
+});
